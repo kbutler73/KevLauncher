@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:KevLauncher"
         Title="KevLauncher"
+        Icon="Assets/KevLauncher.ico"
         Width="760"
         Height="620"
         MinWidth="520"

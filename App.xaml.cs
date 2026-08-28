@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using Forms = System.Windows.Forms;
 using Drawing = System.Drawing;
@@ -6,6 +7,7 @@ namespace KevLauncher;
 
 public partial class App : System.Windows.Application
 {
+    private Drawing.Icon? _appIcon;
     private Forms.NotifyIcon? _trayIcon;
     private MainWindow? _mainWindow;
 
@@ -16,9 +18,10 @@ public partial class App : System.Windows.Application
         _mainWindow = new MainWindow();
         MainWindow = _mainWindow;
 
+        _appIcon = LoadAppIcon();
         _trayIcon = new Forms.NotifyIcon
         {
-            Icon = Drawing.SystemIcons.Application,
+            Icon = _appIcon,
             Text = "KevLauncher",
             Visible = true,
             ContextMenuStrip = BuildTrayMenu()
@@ -33,6 +36,14 @@ public partial class App : System.Windows.Application
         var menu = new Forms.ContextMenuStrip();
         menu.Opening += (_, _) => PopulateTrayMenu(menu);
         return menu;
+    }
+
+    private static Drawing.Icon LoadAppIcon()
+    {
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "KevLauncher.ico");
+        return File.Exists(iconPath)
+            ? new Drawing.Icon(iconPath)
+            : (Drawing.Icon)Drawing.SystemIcons.Application.Clone();
     }
 
     private void PopulateTrayMenu(Forms.ContextMenuStrip menu)
@@ -74,6 +85,8 @@ public partial class App : System.Windows.Application
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
         }
+
+        _appIcon?.Dispose();
     }
 
     private void ExitApplication()
