@@ -42,7 +42,10 @@
         </Grid.RowDefinitions>
 
         <DockPanel Grid.Row="0" LastChildFill="True">
-            <Button DockPanel.Dock="Right" Click="OnAddClick" ToolTip="Add a launcher item">Add</Button>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Click="OnAddFolderClick" ToolTip="Create a folder">Folder</Button>
+                <Button Click="OnAddClick" ToolTip="Add a launcher item">Add</Button>
+            </StackPanel>
             <TextBlock Text="KevLauncher"
                        FontSize="28"
                        FontWeight="SemiBold"
@@ -58,7 +61,7 @@
                      FontSize="15"
                      BorderBrush="#B8C3D1"
                      TextChanged="OnSearchTextChanged" />
-            <TextBlock Text="Search apps, scripts, shortcuts, and files"
+            <TextBlock Text="Search apps, scripts, shortcuts, folders, and files"
                        Margin="14,0,0,0"
                        Foreground="#7A8696"
                        IsHitTestVisible="False"
@@ -82,61 +85,123 @@
                 Background="White"
                 CornerRadius="8">
             <Grid>
-                <ListBox x:Name="LauncherList"
-                         ItemsSource="{Binding LauncherItemsView}"
-                         BorderThickness="0"
-                         Background="Transparent"
-                         MouseDoubleClick="OnItemDoubleClick"
-                         KeyDown="OnLauncherListKeyDown">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate DataType="{x:Type local:LauncherItem}">
-                            <Grid Margin="8" MinHeight="54">
+                <TreeView x:Name="LauncherTree"
+                          ItemsSource="{Binding VisibleRootItems}"
+                          BorderThickness="0"
+                          Background="Transparent"
+                          Padding="8"
+                          SelectedItemChanged="OnSelectedItemChanged"
+                          MouseDoubleClick="OnItemDoubleClick"
+                          KeyDown="OnLauncherTreeKeyDown">
+                    <TreeView.Resources>
+                        <HierarchicalDataTemplate DataType="{x:Type local:LauncherNode}" ItemsSource="{Binding Children}">
+                            <Grid MinHeight="42" Margin="2,4">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="42" />
+                                    <ColumnDefinition Width="38" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
 
-                                <Image Width="30"
-                                       Height="30"
-                                       Source="{Binding Path, Converter={StaticResource PathToIconConverter}}"
-                                       VerticalAlignment="Center" />
+                                <Grid Width="28" Height="28" VerticalAlignment="Center">
+                                    <Image Source="{Binding Path, Converter={StaticResource PathToIconConverter}}">
+                                        <Image.Style>
+                                            <Style TargetType="Image">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsFolder}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Image.Style>
+                                    </Image>
+                                    <Border Background="#E8EEF6" CornerRadius="5">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsFolder}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <TextBlock Text="F"
+                                                   FontWeight="Bold"
+                                                   Foreground="#1A73E8"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" />
+                                    </Border>
+                                </Grid>
 
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding Name}"
-                                               FontSize="16"
+                                               FontSize="15"
                                                FontWeight="SemiBold"
                                                Foreground="#17202C"
                                                TextTrimming="CharacterEllipsis" />
                                     <TextBlock Text="{Binding Path}"
-                                               Margin="0,3,0,0"
+                                               Margin="0,2,0,0"
                                                FontSize="12"
                                                Foreground="#667084"
-                                               TextTrimming="CharacterEllipsis" />
+                                               TextTrimming="CharacterEllipsis">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsFolder}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="2"
                                             Orientation="Horizontal"
                                             VerticalAlignment="Center">
-                                    <Button Content="Run" Click="OnRunClick" Tag="{Binding}" />
-                                    <Button Content="Folder" Click="OnOpenFolderClick" Tag="{Binding}" />
+                                    <Button Content="Run" Click="OnRunClick" Tag="{Binding}">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsFolder}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                    <Button Content="Folder" Click="OnOpenFolderClick" Tag="{Binding}">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsFolder}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
                                     <Button Content="X" Style="{StaticResource IconButton}" Click="OnRemoveClick" Tag="{Binding}" ToolTip="Remove" />
                                 </StackPanel>
                             </Grid>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                        </HierarchicalDataTemplate>
+                    </TreeView.Resources>
+                </TreeView>
 
                 <StackPanel x:Name="EmptyState"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center"
-                            Width="360">
+                            Width="380">
                     <TextBlock Text="Drop apps or shortcuts here"
                                TextAlignment="Center"
                                FontSize="22"
                                FontWeight="SemiBold"
                                Foreground="#293241" />
-                    <TextBlock Text="Add .exe, .lnk, .url, scripts, folders, or documents. They stay here for fast launching from the tray."
+                    <TextBlock Text="Create folders, select one, then add or drop launchers into it."
                                Margin="0,10,0,0"
                                TextAlignment="Center"
                                TextWrapping="Wrap"
@@ -148,6 +213,6 @@
         <TextBlock Grid.Row="3"
                    Margin="0,12,0,0"
                    Foreground="#667084"
-                   Text="Close or minimize to keep KevLauncher running in the system tray." />
+                   Text="Click the tray icon to open this tree. Close or minimize to keep KevLauncher running in the tray." />
     </Grid>
 </Window>

@@ -18,7 +18,7 @@ public sealed class LauncherStore
         _filePath = Path.Combine(appData, "KevLauncher", "launcher-items.json");
     }
 
-    public IReadOnlyList<LauncherItem> Load()
+    public IReadOnlyList<LauncherNode> Load()
     {
         if (!File.Exists(_filePath))
         {
@@ -28,7 +28,22 @@ public sealed class LauncherStore
         try
         {
             var json = File.ReadAllText(_filePath);
-            return JsonSerializer.Deserialize<List<LauncherItem>>(json, SerializerOptions) ?? [];
+            var nodes = JsonSerializer.Deserialize<List<LauncherNode>>(json, SerializerOptions);
+            if (nodes is not null)
+            {
+                return nodes;
+            }
+
+            var legacyItems = JsonSerializer.Deserialize<List<LegacyLauncherItem>>(json, SerializerOptions) ?? [];
+            return legacyItems
+                .Where(item => !string.IsNullOrWhiteSpace(item.Path))
+                .Select(item => new LauncherNode
+                {
+                    Name = item.Name,
+                    Path = item.Path,
+                    IsFolder = false
+                })
+                .ToList();
         }
         catch
         {
@@ -36,7 +51,7 @@ public sealed class LauncherStore
         }
     }
 
-    public void Save(IEnumerable<LauncherItem> items)
+    public void Save(IEnumerable<LauncherNode> items)
     {
         var directory = Path.GetDirectoryName(_filePath);
         if (!string.IsNullOrWhiteSpace(directory))
@@ -45,5 +60,12 @@ public sealed class LauncherStore
         }
 
         File.WriteAllText(_filePath, JsonSerializer.Serialize(items, SerializerOptions));
+    }
+
+    private sealed class LegacyLauncherItem
+    {
+        public string Name { get; set; } = string.Empty;
+
+        public string Path { get; set; } = string.Empty;
     }
 }

@@ -9,6 +9,7 @@ public partial class App : System.Windows.Application
 {
     private Drawing.Icon? _appIcon;
     private Forms.NotifyIcon? _trayIcon;
+    private Forms.ContextMenuStrip? _launcherMenu;
     private MainWindow? _mainWindow;
 
     private void OnStartup(object sender, StartupEventArgs e)
@@ -27,7 +28,7 @@ public partial class App : System.Windows.Application
             ContextMenuStrip = BuildTrayMenu()
         };
 
-        _trayIcon.DoubleClick += (_, _) => ShowLauncher();
+        _trayIcon.MouseClick += OnTrayIconMouseClick;
         ShowLauncher();
     }
 
@@ -50,12 +51,9 @@ public partial class App : System.Windows.Application
     {
         menu.Items.Clear();
 
-        if (_mainWindow is not null && _mainWindow.Items.Count > 0)
+        if (_mainWindow is not null && _mainWindow.RootItems.Count > 0)
         {
-            foreach (var item in _mainWindow.Items.Take(10))
-            {
-                menu.Items.Add(item.Name, null, (_, _) => _mainWindow.LaunchItem(item));
-            }
+            AddLauncherMenuItems(menu.Items, _mainWindow.RootItems);
 
             menu.Items.Add(new Forms.ToolStripSeparator());
         }
@@ -66,6 +64,66 @@ public partial class App : System.Windows.Application
         menu.Items.Add("Exit", null, (_, _) => ExitApplication());
     }
 
+    private void OnTrayIconMouseClick(object? sender, Forms.MouseEventArgs e)
+    {
+        if (e.Button == Forms.MouseButtons.Left)
+        {
+            ShowLauncherMenu();
+        }
+    }
+
+    private void ShowLauncherMenu()
+    {
+        if (_mainWindow is null)
+        {
+            return;
+        }
+
+        _launcherMenu?.Dispose();
+        _launcherMenu = BuildLauncherOnlyMenu();
+        _launcherMenu.Show(Forms.Cursor.Position);
+    }
+
+    private Forms.ContextMenuStrip BuildLauncherOnlyMenu()
+    {
+        var menu = new Forms.ContextMenuStrip();
+
+        if (_mainWindow is not null && _mainWindow.RootItems.Count > 0)
+        {
+            AddLauncherMenuItems(menu.Items, _mainWindow.RootItems);
+        }
+
+        if (menu.Items.Count == 0)
+        {
+            menu.Items.Add("No launcher items yet").Enabled = false;
+        }
+
+        return menu;
+    }
+
+    private void AddLauncherMenuItems(Forms.ToolStripItemCollection items, IEnumerable<LauncherNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            if (node.IsFolder)
+            {
+                var folder = new Forms.ToolStripMenuItem(node.Name);
+                AddLauncherMenuItems(folder.DropDownItems, node.Children);
+
+                if (folder.DropDownItems.Count == 0)
+                {
+                    folder.Enabled = false;
+                }
+
+                items.Add(folder);
+            }
+            else if (node.CanLaunch)
+            {
+                items.Add(node.Name, null, (_, _) => _mainWindow?.LaunchItem(node));
+            }
+        }
+    }
+
     private void ShowLauncher()
     {
         if (_mainWindow is null)
@@ -73,9 +131,7 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        _mainWindow.Show();
-        _mainWindow.WindowState = WindowState.Normal;
-        _mainWindow.Activate();
+        _mainWindow.ShowLauncherTree();
     }
 
     private void OnExit(object sender, ExitEventArgs e)
@@ -86,6 +142,7 @@ public partial class App : System.Windows.Application
             _trayIcon.Dispose();
         }
 
+        _launcherMenu?.Dispose();
         _appIcon?.Dispose();
     }
 
