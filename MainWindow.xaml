@@ -1,0 +1,152 @@
+<Window x:Class="KevLauncher.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:KevLauncher"
+        Title="KevLauncher"
+        Width="760"
+        Height="620"
+        MinWidth="520"
+        MinHeight="420"
+        WindowStartupLocation="CenterScreen"
+        Background="#F5F7FA"
+        AllowDrop="True"
+        DragEnter="OnDragEnter"
+        Drop="OnDrop"
+        Closing="OnClosing"
+        StateChanged="OnStateChanged">
+    <Window.Resources>
+        <local:PathToIconConverter x:Key="PathToIconConverter" />
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Margin" Value="4,0,0,0" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="#CDD6E1" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontSize" Value="14" />
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <DockPanel Grid.Row="0" LastChildFill="True">
+            <Button DockPanel.Dock="Right" Click="OnAddClick" ToolTip="Add a launcher item">Add</Button>
+            <TextBlock Text="KevLauncher"
+                       FontSize="28"
+                       FontWeight="SemiBold"
+                       Foreground="#17202C"
+                       VerticalAlignment="Center" />
+        </DockPanel>
+
+        <Grid Grid.Row="1" Margin="0,18,0,14">
+            <TextBox x:Name="SearchBox"
+                     Height="40"
+                     Padding="12,8"
+                     VerticalContentAlignment="Center"
+                     FontSize="15"
+                     BorderBrush="#B8C3D1"
+                     TextChanged="OnSearchTextChanged" />
+            <TextBlock Text="Search apps, scripts, shortcuts, and files"
+                       Margin="14,0,0,0"
+                       Foreground="#7A8696"
+                       IsHitTestVisible="False"
+                       VerticalAlignment="Center">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Text, ElementName=SearchBox}" Value="">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </Grid>
+
+        <Border Grid.Row="2"
+                BorderBrush="#D7DFEA"
+                BorderThickness="1"
+                Background="White"
+                CornerRadius="8">
+            <Grid>
+                <ListBox x:Name="LauncherList"
+                         ItemsSource="{Binding LauncherItemsView}"
+                         BorderThickness="0"
+                         Background="Transparent"
+                         MouseDoubleClick="OnItemDoubleClick"
+                         KeyDown="OnLauncherListKeyDown">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type local:LauncherItem}">
+                            <Grid Margin="8" MinHeight="54">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="42" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <Image Width="30"
+                                       Height="30"
+                                       Source="{Binding Path, Converter={StaticResource PathToIconConverter}}"
+                                       VerticalAlignment="Center" />
+
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Name}"
+                                               FontSize="16"
+                                               FontWeight="SemiBold"
+                                               Foreground="#17202C"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Path}"
+                                               Margin="0,3,0,0"
+                                               FontSize="12"
+                                               Foreground="#667084"
+                                               TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+
+                                <StackPanel Grid.Column="2"
+                                            Orientation="Horizontal"
+                                            VerticalAlignment="Center">
+                                    <Button Content="Run" Click="OnRunClick" Tag="{Binding}" />
+                                    <Button Content="Folder" Click="OnOpenFolderClick" Tag="{Binding}" />
+                                    <Button Content="X" Style="{StaticResource IconButton}" Click="OnRemoveClick" Tag="{Binding}" ToolTip="Remove" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <StackPanel x:Name="EmptyState"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Width="360">
+                    <TextBlock Text="Drop apps or shortcuts here"
+                               TextAlignment="Center"
+                               FontSize="22"
+                               FontWeight="SemiBold"
+                               Foreground="#293241" />
+                    <TextBlock Text="Add .exe, .lnk, .url, scripts, folders, or documents. They stay here for fast launching from the tray."
+                               Margin="0,10,0,0"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               Foreground="#667084" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <TextBlock Grid.Row="3"
+                   Margin="0,12,0,0"
+                   Foreground="#667084"
+                   Text="Close or minimize to keep KevLauncher running in the system tray." />
+    </Grid>
+</Window>
