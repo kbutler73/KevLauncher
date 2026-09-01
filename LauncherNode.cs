@@ -1,19 +1,27 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 
 namespace KevLauncher;
 
-public sealed class LauncherNode
+public sealed class LauncherNode : INotifyPropertyChanged
 {
-    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    private string _id = Guid.NewGuid().ToString("N");
+    private string _name = string.Empty;
+    private string _path = string.Empty;
 
-    public string Name { get; set; } = string.Empty;
+    public string Id { get => _id; set { _id = value; OnPropertyChanged(nameof(Id)); } }
 
-    public string Path { get; set; } = string.Empty;
+    public string Name { get => _name; set { _name = value; OnPropertyChanged(nameof(Name)); } }
+
+    public string Path { get => _path; set { _path = value; OnPropertyChanged(nameof(Path)); } }
 
     public bool IsFolder { get; set; }
 
-    public ObservableCollection<LauncherNode> Children { get; set; } = [];
+    private bool _isExpanded;
+    public bool IsExpanded { get => _isExpanded; set { _isExpanded = value; OnPropertyChanged(nameof(IsExpanded)); } }
+
+    public ObservableCollection<LauncherNode> Children { get; set; } = new ObservableCollection<LauncherNode>();
 
     public bool CanLaunch => !IsFolder && !string.IsNullOrWhiteSpace(Path);
 
@@ -37,4 +45,8 @@ public sealed class LauncherNode
             IsFolder = false
         };
     }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void OnPropertyChanged(string propertyName) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }

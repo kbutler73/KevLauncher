@@ -42,7 +42,13 @@
         </Grid.RowDefinitions>
 
         <DockPanel Grid.Row="0" LastChildFill="True">
-            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <CheckBox x:Name="StartWithWindowsCheckbox"
+                          VerticalAlignment="Center"
+                          Margin="0,0,8,0"
+                          Content="Start with Windows"
+                          Checked="OnStartWithWindowsChecked"
+                          Unchecked="OnStartWithWindowsUnchecked" />
                 <Button Click="OnAddFolderClick" ToolTip="Create a folder">Folder</Button>
                 <Button Click="OnAddClick" ToolTip="Add a launcher item">Add</Button>
             </StackPanel>
@@ -92,10 +98,25 @@
                           Padding="8"
                           SelectedItemChanged="OnSelectedItemChanged"
                           MouseDoubleClick="OnItemDoubleClick"
-                          KeyDown="OnLauncherTreeKeyDown">
+                          KeyDown="OnLauncherTreeKeyDown"
+                          AllowDrop="True"
+                          PreviewMouseLeftButtonDown="OnTreeViewPreviewMouseLeftButtonDown"
+                          MouseMove="OnTreeViewMouseMove"
+                          DragOver="OnTreeViewDragOver"
+                          Drop="OnTreeViewDrop">
+                    <TreeView.ItemContainerStyle>
+                        <Style TargetType="TreeViewItem">
+                            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                        </Style>
+                    </TreeView.ItemContainerStyle>
                     <TreeView.Resources>
                         <HierarchicalDataTemplate DataType="{x:Type local:LauncherNode}" ItemsSource="{Binding Children}">
                             <Grid MinHeight="42" Margin="2,4">
+                                <Grid.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Rename" Click="OnRenameClick"/>
+                                    </ContextMenu>
+                                </Grid.ContextMenu>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="38" />
                                     <ColumnDefinition Width="*" />

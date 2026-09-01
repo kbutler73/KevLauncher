@@ -29,7 +29,13 @@ public partial class App : System.Windows.Application
         };
 
         _trayIcon.MouseClick += OnTrayIconMouseClick;
-        ShowLauncher();
+
+        // If launched with --minimized (used by startup registry), don't show the window.
+        var startMinimized = e.Args is not null && e.Args.Any(a => string.Equals(a, "--minimized", StringComparison.OrdinalIgnoreCase));
+        if (!startMinimized)
+        {
+            ShowLauncher();
+        }
     }
 
     private Forms.ContextMenuStrip BuildTrayMenu()

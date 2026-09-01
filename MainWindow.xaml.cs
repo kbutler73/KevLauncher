@@ -12,6 +12,8 @@ public partial class MainWindow : Window
 {
     private readonly LauncherStore _store = new();
     private LauncherNode? _selectedNode;
+    private System.Windows.Point _dragStartPoint;
+    private string? _draggedNodeId;
 
     public ObservableCollection<LauncherNode> RootItems { get; } = [];
 
@@ -32,6 +34,17 @@ public partial class MainWindow : Window
 
         RebuildVisibleTree();
         UpdateEmptyState();
+        try
+        {
+            if (FindName("StartWithWindowsCheckbox") is System.Windows.Controls.CheckBox cb)
+            {
+                cb.IsChecked = StartupManager.IsEnabled();
+            }
+        }
+        catch
+        {
+            // ignore - best effort
+        }
     }
 
     public void AddItemFromDialog()
@@ -87,6 +100,38 @@ public partial class MainWindow : Window
         Save();
     }
 
+    private void OnStartWithWindowsChecked(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            StartupManager.SetEnabled(true);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"Could not enable Start with Windows.\n\n{ex.Message}", "KevLauncher", MessageBoxButton.OK, MessageBoxImage.Error);
+            if (sender is System.Windows.Controls.CheckBox cb)
+            {
+                cb.IsChecked = false;
+            }
+        }
+    }
+
+    private void OnStartWithWindowsUnchecked(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            StartupManager.SetEnabled(false);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"Could not disable Start with Windows.\n\n{ex.Message}", "KevLauncher", MessageBoxButton.OK, MessageBoxImage.Error);
+            if (sender is System.Windows.Controls.CheckBox cb)
+            {
+                cb.IsChecked = true;
+            }
+        }
+    }
+
     private void OnDragEnter(object sender, System.Windows.DragEventArgs e)
     {
         e.Effects = e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop)
@@ -101,6 +146,152 @@ public partial class MainWindow : Window
         {
             AddPaths(paths);
         }
+    }
+
+    private void OnRenameClick(object sender, RoutedEventArgs e)
+    {
+        if ((sender as System.Windows.Controls.MenuItem)?.Parent is System.Windows.Controls.ContextMenu menu
+            && menu.PlacementTarget is System.Windows.FrameworkElement fe
+            && fe.DataContext is LauncherNode node)
+        {
+            var newName = Microsoft.VisualBasic.Interaction.InputBox("Name:", "Rename", node.Name).Trim();
+            if (!string.IsNullOrWhiteSpace(newName) && newName != node.Name)
+            {
+                node.Name = newName;
+                Save();
+            }
+        }
+    }
+
+    private void OnTreeViewPreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        _dragStartPoint = e.GetPosition(null);
+        if (LauncherTree.SelectedItem is LauncherNode node)
+        {
+            _draggedNodeId = node.Id;
+        }
+        else
+        {
+            _draggedNodeId = null;
+        }
+    }
+
+    private void OnTreeViewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (e.LeftButton != System.Windows.Input.MouseButtonState.Pressed)
+            return;
+
+        if (_draggedNodeId is null)
+            return;
+
+        var currentPos = e.GetPosition(null);
+        if (Math.Abs(currentPos.X - _dragStartPoint.X) > SystemParameters.MinimumHorizontalDragDistance ||
+            Math.Abs(currentPos.Y - _dragStartPoint.Y) > SystemParameters.MinimumVerticalDragDistance)
+        {
+            var data = new System.Windows.DataObject("KevLauncher.LauncherNode", _draggedNodeId);
+            System.Windows.DragDrop.DoDragDrop(LauncherTree, data, System.Windows.DragDropEffects.Move);
+        }
+    }
+
+    private void OnTreeViewDragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent("KevLauncher.LauncherNode"))
+        {
+            e.Effects = System.Windows.DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
+        e.Effects = System.Windows.DragDropEffects.Move;
+        e.Handled = true;
+    }
+
+    private void OnTreeViewDrop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent("KevLauncher.LauncherNode"))
+            return;
+
+        var sourceId = e.Data.GetData("KevLauncher.LauncherNode") as string;
+        if (string.IsNullOrWhiteSpace(sourceId))
+            return;
+
+        // find target node under mouse
+        var tvItem = FindTreeViewItemUnderMouse(e.GetPosition(LauncherTree));
+        LauncherNode? targetNode = tvItem?.DataContext as LauncherNode;
+
+        // prevent dropping onto self or descendant
+        if (targetNode is not null && IsDescendant(sourceId, targetNode))
+        {
+            return;
+        }
+
+        // remove from old parent
+        var sourceNode = FindNode(RootItems, sourceId);
+        if (sourceNode is null)
+            return;
+
+        var oldParent = FindParent(RootItems, sourceId);
+        if (oldParent is null)
+        {
+            RootItems.Remove(sourceNode);
+        }
+        else
+        {
+            oldParent.Children.Remove(sourceNode);
+        }
+
+        // add to target
+        if (targetNode is null)
+        {
+            // drop to root
+            RootItems.Add(sourceNode);
+        }
+        else if (targetNode.IsFolder)
+        {
+            targetNode.Children.Add(sourceNode);
+        }
+        else
+        {
+            // insert next to target in same parent
+            var parent = FindParent(RootItems, targetNode.Id);
+            if (parent is null)
+            {
+                var index = RootItems.IndexOf(targetNode);
+                RootItems.Insert(index + 1, sourceNode);
+            }
+            else
+            {
+                var index = parent.Children.IndexOf(targetNode);
+                parent.Children.Insert(index + 1, sourceNode);
+            }
+        }
+
+        Save();
+    }
+
+    private System.Windows.Controls.TreeViewItem? FindTreeViewItemUnderMouse(System.Windows.Point position)
+    {
+        var element = LauncherTree.InputHitTest(position) as System.Windows.DependencyObject;
+        while (element is not null && element is not System.Windows.Controls.TreeViewItem)
+        {
+            element = System.Windows.Media.VisualTreeHelper.GetParent(element);
+        }
+
+        return element as System.Windows.Controls.TreeViewItem;
+    }
+
+    private bool IsDescendant(string sourceId, LauncherNode target)
+    {
+        if (target.Id == sourceId)
+            return true;
+
+        foreach (var child in target.Children)
+        {
+            if (IsDescendant(sourceId, child))
+                return true;
+        }
+
+        return false;
     }
 
     private void AddPaths(IEnumerable<string> paths)
@@ -291,7 +482,8 @@ public partial class MainWindow : Window
             Id = node.Id,
             Name = node.Name,
             Path = node.Path,
-            IsFolder = node.IsFolder
+            IsFolder = node.IsFolder,
+            IsExpanded = node.IsExpanded
         };
 
         var visibleChildren = isMatch ? node.Children.AsEnumerable() : children;
@@ -310,7 +502,8 @@ public partial class MainWindow : Window
             Id = node.Id,
             Name = node.Name,
             Path = node.Path,
-            IsFolder = node.IsFolder
+            IsFolder = node.IsFolder,
+            IsExpanded = node.IsExpanded
         };
 
         foreach (var child in node.Children)
