@@ -43,12 +43,6 @@
 
         <DockPanel Grid.Row="0" LastChildFill="True">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                <CheckBox x:Name="StartWithWindowsCheckbox"
-                          VerticalAlignment="Center"
-                          Margin="0,0,8,0"
-                          Content="Start with Windows"
-                          Checked="OnStartWithWindowsChecked"
-                          Unchecked="OnStartWithWindowsUnchecked" />
                 <Button Click="OnAddFolderClick" ToolTip="Create a folder">Folder</Button>
                 <Button Click="OnAddClick" ToolTip="Add a launcher item">Add</Button>
             </StackPanel>
@@ -114,7 +108,7 @@
                             <Grid MinHeight="42" Margin="2,4">
                                 <Grid.ContextMenu>
                                     <ContextMenu>
-                                        <MenuItem Header="Rename" Click="OnRenameClick"/>
+                                        <MenuItem Header="Edit..." Click="OnEditClick"/>
                                     </ContextMenu>
                                 </Grid.ContextMenu>
                                 <Grid.ColumnDefinitions>
@@ -156,45 +150,23 @@
                                 </Grid>
 
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Name}"
-                                               FontSize="15"
-                                               FontWeight="SemiBold"
-                                               Foreground="#17202C"
-                                               TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding Path}"
-                                               Margin="0,2,0,0"
-                                               FontSize="12"
-                                               Foreground="#667084"
-                                               TextTrimming="CharacterEllipsis">
-                                        <TextBlock.Style>
-                                            <Style TargetType="TextBlock">
-                                                <Setter Property="Visibility" Value="Visible" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsFolder}" Value="True">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </TextBlock.Style>
-                                    </TextBlock>
+                                    <Grid>
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontSize="15"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="#17202C"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </Grid>
                                 </StackPanel>
 
                                 <StackPanel Grid.Column="2"
                                             Orientation="Horizontal"
                                             VerticalAlignment="Center">
-                                    <Button Content="Run" Click="OnRunClick" Tag="{Binding}">
-                                        <Button.Style>
-                                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                                <Setter Property="Visibility" Value="Visible" />
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsFolder}" Value="True">
-                                                        <Setter Property="Visibility" Value="Collapsed" />
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Button.Style>
+                                    <Button Click="OnEditClick" Tag="{Binding}" Style="{StaticResource IconButton}" ToolTip="Edit">
+                                        <TextBlock FontSize="14" VerticalAlignment="Center">✏</TextBlock>
                                     </Button>
-                                    <Button Content="Folder" Click="OnOpenFolderClick" Tag="{Binding}">
+                                    <Button Click="OnOpenFolderClick" Tag="{Binding}" ToolTip="Open folder">
+                                        <TextBlock FontSize="14" VerticalAlignment="Center">📁</TextBlock>
                                         <Button.Style>
                                             <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
                                                 <Setter Property="Visibility" Value="Visible" />

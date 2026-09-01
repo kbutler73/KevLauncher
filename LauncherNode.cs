@@ -9,6 +9,7 @@ public sealed class LauncherNode : INotifyPropertyChanged
     private string _id = Guid.NewGuid().ToString("N");
     private string _name = string.Empty;
     private string _path = string.Empty;
+    private string _parameters = string.Empty;
 
     public string Id { get => _id; set { _id = value; OnPropertyChanged(nameof(Id)); } }
 
@@ -16,10 +17,13 @@ public sealed class LauncherNode : INotifyPropertyChanged
 
     public string Path { get => _path; set { _path = value; OnPropertyChanged(nameof(Path)); } }
 
+    public string Parameters { get => _parameters; set { _parameters = value; OnPropertyChanged(nameof(Parameters)); } }
+
     public bool IsFolder { get; set; }
 
     private bool _isExpanded;
     public bool IsExpanded { get => _isExpanded; set { _isExpanded = value; OnPropertyChanged(nameof(IsExpanded)); } }
+    // previously had inline edit support; kept minimal model without inline state
 
     public ObservableCollection<LauncherNode> Children { get; set; } = new ObservableCollection<LauncherNode>();
 

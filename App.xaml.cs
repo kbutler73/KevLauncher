@@ -64,6 +64,37 @@ public partial class App : System.Windows.Application
             menu.Items.Add(new Forms.ToolStripSeparator());
         }
 
+        // Start with Windows toggle
+        try
+        {
+            var startItem = new Forms.ToolStripMenuItem("Start with Windows")
+            {
+                Checked = StartupManager.IsEnabled(),
+                CheckOnClick = true
+            };
+
+            startItem.Click += (_, _) =>
+            {
+                try
+                {
+                    StartupManager.SetEnabled(startItem.Checked);
+                }
+                catch (Exception ex)
+                {
+                    System.Windows.MessageBox.Show($"Could not change Start with Windows setting.\n\n{ex.Message}", "KevLauncher", MessageBoxButton.OK, MessageBoxImage.Error);
+                    // revert check state
+                    startItem.Checked = !startItem.Checked;
+                }
+            };
+
+            menu.Items.Add(startItem);
+            menu.Items.Add(new Forms.ToolStripSeparator());
+        }
+        catch
+        {
+            // ignore failures when reading registry
+        }
+
         menu.Items.Add("Open KevLauncher", null, (_, _) => ShowLauncher());
         menu.Items.Add("Add item...", null, (_, _) => _mainWindow?.AddItemFromDialog());
         menu.Items.Add(new Forms.ToolStripSeparator());

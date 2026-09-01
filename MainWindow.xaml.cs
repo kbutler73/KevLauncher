@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Documents;
 using Microsoft.VisualBasic;
 
 namespace KevLauncher;
@@ -34,17 +35,6 @@ public partial class MainWindow : Window
 
         RebuildVisibleTree();
         UpdateEmptyState();
-        try
-        {
-            if (FindName("StartWithWindowsCheckbox") is System.Windows.Controls.CheckBox cb)
-            {
-                cb.IsChecked = StartupManager.IsEnabled();
-            }
-        }
-        catch
-        {
-            // ignore - best effort
-        }
     }
 
     public void AddItemFromDialog()
@@ -100,38 +90,6 @@ public partial class MainWindow : Window
         Save();
     }
 
-    private void OnStartWithWindowsChecked(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            StartupManager.SetEnabled(true);
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(this, $"Could not enable Start with Windows.\n\n{ex.Message}", "KevLauncher", MessageBoxButton.OK, MessageBoxImage.Error);
-            if (sender is System.Windows.Controls.CheckBox cb)
-            {
-                cb.IsChecked = false;
-            }
-        }
-    }
-
-    private void OnStartWithWindowsUnchecked(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            StartupManager.SetEnabled(false);
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(this, $"Could not disable Start with Windows.\n\n{ex.Message}", "KevLauncher", MessageBoxButton.OK, MessageBoxImage.Error);
-            if (sender is System.Windows.Controls.CheckBox cb)
-            {
-                cb.IsChecked = true;
-            }
-        }
-    }
-
     private void OnDragEnter(object sender, System.Windows.DragEventArgs e)
     {
         e.Effects = e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop)
@@ -150,18 +108,48 @@ public partial class MainWindow : Window
 
     private void OnRenameClick(object sender, RoutedEventArgs e)
     {
-        if ((sender as System.Windows.Controls.MenuItem)?.Parent is System.Windows.Controls.ContextMenu menu
-            && menu.PlacementTarget is System.Windows.FrameworkElement fe
-            && fe.DataContext is LauncherNode node)
+        // kept for compatibility; redirect to edit
+        OnEditClick(sender, e);
+    }
+
+    private void OnEditClick(object sender, RoutedEventArgs e)
+    {
+        LauncherNode? node = null;
+
+        // MenuItem context
+        if (sender is System.Windows.Controls.MenuItem mi && mi.Parent is System.Windows.Controls.ContextMenu menu && menu.PlacementTarget is System.Windows.FrameworkElement fe && fe.DataContext is LauncherNode n1)
         {
-            var newName = Microsoft.VisualBasic.Interaction.InputBox("Name:", "Rename", node.Name).Trim();
-            if (!string.IsNullOrWhiteSpace(newName) && newName != node.Name)
-            {
-                node.Name = newName;
-                Save();
-            }
+            node = n1;
+        }
+        // Button or other FrameworkElement using Tag
+        else if (sender is System.Windows.FrameworkElement fe2 && fe2.Tag is LauncherNode n2)
+        {
+            node = n2;
+        }
+        // Fallback: DataContext
+        else if (sender is System.Windows.FrameworkElement fe3 && fe3.DataContext is LauncherNode n3)
+        {
+            node = n3;
+        }
+
+        if (node is null)
+            return;
+
+        var dlg = new EditItemWindow(node.Name, node.Path, node.Parameters)
+        {
+            Owner = this
+        };
+
+        if (dlg.ShowDialog() == true)
+        {
+            node.Name = dlg.ItemName;
+            node.Path = dlg.ItemPath;
+            node.Parameters = dlg.ItemParameters;
+            Save();
         }
     }
+
+    // Inline edit handlers removed; editing now uses EditItemWindow
 
     private void OnTreeViewPreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
@@ -204,6 +192,12 @@ public partial class MainWindow : Window
 
         e.Effects = System.Windows.DragDropEffects.Move;
         e.Handled = true;
+
+        // show visual indicator for before/inside/after
+        var pos = e.GetPosition(LauncherTree);
+        var tvItem = FindTreeViewItemUnderMouse(pos);
+
+        UpdateDropAdorner(tvItem, e.GetPosition(tvItem ?? (System.Windows.IInputElement)LauncherTree));
     }
 
     private void OnTreeViewDrop(object sender, System.Windows.DragEventArgs e)
@@ -218,6 +212,10 @@ public partial class MainWindow : Window
         // find target node under mouse
         var tvItem = FindTreeViewItemUnderMouse(e.GetPosition(LauncherTree));
         LauncherNode? targetNode = tvItem?.DataContext as LauncherNode;
+
+        // determine placement
+        var relative = tvItem is not null ? e.GetPosition(tvItem) : e.GetPosition(LauncherTree);
+        var placement = DeterminePlacement(tvItem, relative);
 
         // prevent dropping onto self or descendant
         if (targetNode is not null && IsDescendant(sourceId, targetNode))
@@ -240,19 +238,32 @@ public partial class MainWindow : Window
             oldParent.Children.Remove(sourceNode);
         }
 
-        // add to target
+        // add to target according to placement
         if (targetNode is null)
         {
             // drop to root
             RootItems.Add(sourceNode);
         }
-        else if (targetNode.IsFolder)
+        else if (placement == DropPosition.Inside && targetNode.IsFolder)
         {
             targetNode.Children.Add(sourceNode);
         }
-        else
+        else if (placement == DropPosition.Before)
         {
-            // insert next to target in same parent
+            var parent = FindParent(RootItems, targetNode.Id);
+            if (parent is null)
+            {
+                var index = RootItems.IndexOf(targetNode);
+                RootItems.Insert(index, sourceNode);
+            }
+            else
+            {
+                var index = parent.Children.IndexOf(targetNode);
+                parent.Children.Insert(index, sourceNode);
+            }
+        }
+        else // After or default
+        {
             var parent = FindParent(RootItems, targetNode.Id);
             if (parent is null)
             {
@@ -266,6 +277,8 @@ public partial class MainWindow : Window
             }
         }
 
+        RemoveDropAdorner();
+
         Save();
     }
 
@@ -276,6 +289,8 @@ public partial class MainWindow : Window
         {
             element = System.Windows.Media.VisualTreeHelper.GetParent(element);
         }
+        if (element is null)
+            return null;
 
         return element as System.Windows.Controls.TreeViewItem;
     }
@@ -294,6 +309,67 @@ public partial class MainWindow : Window
         return false;
     }
 
+    private DropAdorner? _currentAdorner;
+    private System.Windows.Controls.TreeViewItem? _adornedItem;
+
+    private DropPosition DeterminePlacement(System.Windows.Controls.TreeViewItem? tvItem, System.Windows.Point relative)
+    {
+        if (tvItem is null)
+            return DropPosition.After;
+
+        var h = tvItem.ActualHeight;
+        if (h <= 0)
+            return DropPosition.After;
+
+        if (relative.Y < h * 0.33)
+            return DropPosition.Before;
+        if (relative.Y > h * 0.66)
+            return DropPosition.After;
+        return DropPosition.Inside;
+    }
+
+    private void UpdateDropAdorner(System.Windows.Controls.TreeViewItem? tvItem, System.Windows.Point relative)
+    {
+        var placement = DeterminePlacement(tvItem, relative);
+
+        if (_adornedItem != tvItem || _currentAdorner is null)
+        {
+            RemoveDropAdorner();
+        }
+
+        if (tvItem is null)
+            return;
+
+        if (_currentAdorner is not null && _adornedItem == tvItem)
+        {
+            // already showing
+            return;
+        }
+
+        var layer = AdornerLayer.GetAdornerLayer(tvItem);
+        if (layer is null)
+            return;
+
+        _currentAdorner = new DropAdorner(tvItem, placement);
+        layer.Add(_currentAdorner);
+        _adornedItem = tvItem;
+    }
+
+    private void RemoveDropAdorner()
+    {
+        if (_currentAdorner is null || _adornedItem is null)
+            return;
+
+        var layer = AdornerLayer.GetAdornerLayer(_adornedItem);
+        if (layer is not null)
+        {
+            layer.Remove(_currentAdorner);
+        }
+
+        _currentAdorner = null;
+        _adornedItem = null;
+    }
+
     private void AddPaths(IEnumerable<string> paths)
     {
         foreach (var path in paths.Where(path => File.Exists(path) || Directory.Exists(path)))
@@ -303,7 +379,28 @@ public partial class MainWindow : Window
                 continue;
             }
 
-            AddNode(LauncherNode.CreateLaunchItem(path));
+            var node = LauncherNode.CreateLaunchItem(path);
+            AddNode(node);
+
+            // Prompt to edit parameters / name after adding a new launch item
+            try
+            {
+                var dlg = new EditItemWindow(node.Name, node.Path, node.Parameters)
+                {
+                    Owner = this
+                };
+
+                if (dlg.ShowDialog() == true)
+                {
+                    node.Name = dlg.ItemName;
+                    node.Path = dlg.ItemPath;
+                    node.Parameters = dlg.ItemParameters;
+                }
+            }
+            catch
+            {
+                // best-effort
+            }
         }
 
         Save();
@@ -352,8 +449,52 @@ public partial class MainWindow : Window
     {
         if (LauncherTree.SelectedItem is LauncherNode item)
         {
+            // launch on double-click
             LaunchItem(item);
         }
+    }
+
+    private System.Windows.Controls.TreeViewItem? FindTreeViewItemByNode(LauncherNode node)
+    {
+        // Walk the tree to find the TreeViewItem whose DataContext.Id matches
+        return FindTreeViewItem(LauncherTree, node.Id);
+    }
+
+    private System.Windows.Controls.TreeViewItem? FindTreeViewItem(System.Windows.Controls.ItemsControl container, string id)
+    {
+        for (int i = 0; i < container.Items.Count; i++)
+        {
+            var item = container.ItemContainerGenerator.ContainerFromIndex(i) as System.Windows.Controls.TreeViewItem;
+            if (item is null)
+                continue;
+
+            if (item.DataContext is LauncherNode ln && ln.Id == id)
+                return item;
+
+            var child = FindTreeViewItem(item, id);
+            if (child is not null)
+                return child;
+        }
+
+        return null;
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject depObj) where T : DependencyObject
+    {
+        if (depObj == null) return null;
+
+        for (int i = 0; i < System.Windows.Media.VisualTreeHelper.GetChildrenCount(depObj); i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(depObj, i);
+            if (child is T t)
+                return t;
+
+            var result = FindVisualChild<T>(child);
+            if (result is not null)
+                return result;
+        }
+
+        return null;
     }
 
     private void OnLauncherTreeKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
@@ -367,6 +508,24 @@ public partial class MainWindow : Window
             RemoveNode(selected.Id);
             Save();
         }
+        else if (e.Key == Key.F2 && LauncherTree.SelectedItem is LauncherNode toRename)
+        {
+            // open edit dialog for selected node
+            var dlg = new EditItemWindow(toRename.Name, toRename.Path, toRename.Parameters)
+            {
+                Owner = this
+            };
+
+            if (dlg.ShowDialog() == true)
+            {
+                toRename.Name = dlg.ItemName;
+                toRename.Path = dlg.ItemPath;
+                toRename.Parameters = dlg.ItemParameters;
+                Save();
+            }
+
+            e.Handled = true;
+        }
     }
 
     private void Launch(LauncherNode item)
@@ -376,8 +535,9 @@ public partial class MainWindow : Window
             Process.Start(new ProcessStartInfo
             {
                 FileName = item.Path,
+                Arguments = item.Parameters ?? string.Empty,
                 UseShellExecute = true,
-                WorkingDirectory = Directory.Exists(item.Path)
+                WorkingDirectory = !string.IsNullOrWhiteSpace(item.Path) && Directory.Exists(item.Path)
                     ? item.Path
                     : Path.GetDirectoryName(item.Path)
             });
