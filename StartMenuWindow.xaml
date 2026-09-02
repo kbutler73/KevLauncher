@@ -1,0 +1,37 @@
+<Window x:Class="KevLauncher.StartMenuWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:KevLauncher"
+        Title="KevLauncher" Width="640" Height="420" ResizeMode="NoResize" ShowInTaskbar="True"
+        Background="{DynamicResource WindowBackground}">
+    <Window.Resources>
+        <Style x:Key="IconTileButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
+            <ListBox x:Name="FoldersList" ItemsSource="{Binding Folders}" DisplayMemberPath="Name" SelectedItem="{Binding SelectedFolder, Mode=TwoWay}" HorizontalAlignment="Left" Background="{DynamicResource SurfaceBackground}" Foreground="{DynamicResource PrimaryTextBrush}"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto" />
+        </Border>
+
+        <ScrollViewer Grid.Column="1" Padding="12" Background="{DynamicResource SurfaceBackground}"
+                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <WrapPanel x:Name="IconsPanel" IsItemsHost="False" Orientation="Horizontal" />
+        </ScrollViewer>
+    </Grid>
+</Window>

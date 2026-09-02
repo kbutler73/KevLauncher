@@ -15,6 +15,8 @@ public partial class MainWindow : Window
     private LauncherNode? _selectedNode;
     private System.Windows.Point _dragStartPoint;
     private string? _draggedNodeId;
+        private bool _minimizeToTray = false; // when false, keep taskbar icon visible
+        private WindowState _lastWindowState = WindowState.Normal;
 
     public ObservableCollection<LauncherNode> RootItems { get; } = [];
 
@@ -36,6 +38,8 @@ public partial class MainWindow : Window
         RebuildVisibleTree();
         UpdateEmptyState();
     }
+
+    // Previously handled activation to toggle StartMenu; StartMenu is now the primary window.
 
     public void AddItemFromDialog()
     {
@@ -590,7 +594,10 @@ public partial class MainWindow : Window
 
     private void OnStateChanged(object? sender, EventArgs e)
     {
-        if (WindowState == WindowState.Minimized)
+        // track last state
+        _lastWindowState = WindowState;
+
+        if (_minimizeToTray && WindowState == WindowState.Minimized)
         {
             Hide();
         }
