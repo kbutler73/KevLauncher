@@ -143,11 +143,15 @@ public partial class StartMenuWindow : Window
             }
             else
             {
+                // create a flexible Image that will scale to fit the tile while preserving aspect ratio
+                var imageSource = (new PathToIconConverter()).Convert(child.Path, typeof(System.Windows.Media.ImageSource), null, System.Globalization.CultureInfo.CurrentCulture) as System.Windows.Media.ImageSource;
                 iconElement = new System.Windows.Controls.Image
                 {
-                    Width = 48,
-                    Height = 48,
-                    Source = (new PathToIconConverter()).Convert(child.Path, typeof(System.Windows.Media.ImageSource), null, System.Globalization.CultureInfo.CurrentCulture) as System.Windows.Media.ImageSource
+                    Source = imageSource,
+                    Stretch = System.Windows.Media.Stretch.Uniform,
+                    StretchDirection = System.Windows.Controls.StretchDirection.Both,
+                    SnapsToDevicePixels = true,
+                    UseLayoutRounding = true
                 };
             }
 
@@ -163,15 +167,36 @@ public partial class StartMenuWindow : Window
             // Put the icon inside a small border so we can highlight on hover without covering the label
             var iconContainer = new System.Windows.Controls.Border
             {
-                Width = 48,
-                Height = 48,
-                Child = iconElement,
+                Width = 56,
+                Height = 56,
                 Background = System.Windows.Media.Brushes.Transparent,
                 CornerRadius = new System.Windows.CornerRadius(8),
                 HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
                 VerticalAlignment = System.Windows.VerticalAlignment.Center,
-                Padding = new Thickness(6)
+                Padding = new Thickness(4),
+                Child = null
             };
+
+            // If the icon element is an Image, constrain it to fit the container. Keep Width/Height unset so Stretch + Max* control sizing.
+            if (iconElement is System.Windows.Controls.Image img)
+            {
+                img.MaxWidth = 48;
+                img.MaxHeight = 48;
+                img.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+                img.VerticalAlignment = System.Windows.VerticalAlignment.Center;
+                img.Stretch = System.Windows.Media.Stretch.Uniform;
+                iconContainer.Child = img;
+            }
+            else
+            {
+                // center vector/text glyphs as well
+                if (iconElement is FrameworkElement fe)
+                {
+                    fe.HorizontalAlignment = System.Windows.HorizontalAlignment.Center;
+                    fe.VerticalAlignment = System.Windows.VerticalAlignment.Center;
+                }
+                iconContainer.Child = iconElement;
+            }
 
             stack.Children.Add(iconContainer);
             stack.Children.Add(txt);
@@ -231,9 +256,10 @@ public partial class StartMenuWindow : Window
                     hoverBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.LightGray) { Opacity = 0.08 };
                 }
 
+                // apply scale to the container so both icon and its outline/shadow scale together
                 var scale = new System.Windows.Media.ScaleTransform(1.0, 1.0);
-                iconElement.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
-                iconElement.RenderTransform = scale;
+                iconContainer.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
+                iconContainer.RenderTransform = scale;
 
                 // use border outline on hover instead of filled rectangle
                 btn.MouseEnter += (_, _) =>
