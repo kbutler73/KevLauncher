@@ -11,6 +11,9 @@ public partial class StartMenuWindow : Window
     private System.Windows.Point _tileDragStart;
     private System.Windows.Controls.Button? _draggedTile;
     private System.Windows.Controls.Button? _dropTargetTile;
+    private DropAdorner? _tileInsertionAdorner;
+    private System.Windows.Documents.AdornerLayer? _tileInsertionLayer;
+    private bool _insertBeforeTile;
     private bool _isDraggingTile;
 
     public ObservableCollection<LauncherNode> Folders { get; } = new();
@@ -456,7 +459,8 @@ public partial class StartMenuWindow : Window
             target = null;
         }
 
-        SetDropTarget(target);
+        var insertBefore = target is not null && e.GetPosition(target).X < target.ActualWidth / 2;
+        SetDropTarget(target, insertBefore);
         e.Effects = System.Windows.DragDropEffects.Move;
         e.Handled = true;
     }
@@ -478,8 +482,10 @@ public partial class StartMenuWindow : Window
                 return;
             }
 
-            var target = FindTileAt(e.GetPosition(IconsPanel))?.Tag as LauncherNode;
-            MoveTile(dragged, target);
+            var targetTile = FindTileAt(e.GetPosition(IconsPanel));
+            var target = targetTile?.Tag as LauncherNode;
+            var insertBefore = targetTile is not null && e.GetPosition(targetTile).X < targetTile.ActualWidth / 2;
+            MoveTile(dragged, target, insertBefore);
         }
         finally
         {
@@ -504,20 +510,25 @@ public partial class StartMenuWindow : Window
         return null;
     }
 
-    private void SetDropTarget(System.Windows.Controls.Button? tile)
+    private void SetDropTarget(System.Windows.Controls.Button? tile, bool insertBefore)
     {
-        if (_dropTargetTile == tile)
+        if (_dropTargetTile == tile && _insertBeforeTile == insertBefore)
         {
             return;
         }
 
         ClearDropTarget();
         _dropTargetTile = tile;
+        _insertBeforeTile = insertBefore;
         if (tile is not null)
         {
-            tile.Background = System.Windows.Application.Current?.Resources["AccentBrush"] as System.Windows.Media.Brush
-                              ?? System.Windows.Media.Brushes.LightSkyBlue;
-            tile.Opacity = 0.7;
+            _tileInsertionLayer = System.Windows.Documents.AdornerLayer.GetAdornerLayer(tile);
+            if (_tileInsertionLayer is not null)
+            {
+                _tileInsertionAdorner = new DropAdorner(tile,
+                    insertBefore ? DropPosition.TileBefore : DropPosition.TileAfter);
+                _tileInsertionLayer.Add(_tileInsertionAdorner);
+            }
         }
     }
 
@@ -525,13 +536,19 @@ public partial class StartMenuWindow : Window
     {
         if (_dropTargetTile is not null)
         {
-            _dropTargetTile.Background = System.Windows.Media.Brushes.Transparent;
-            _dropTargetTile.Opacity = 1;
             _dropTargetTile = null;
         }
+
+        if (_tileInsertionAdorner is not null && _tileInsertionLayer is not null)
+        {
+            _tileInsertionLayer.Remove(_tileInsertionAdorner);
+        }
+
+        _tileInsertionAdorner = null;
+        _tileInsertionLayer = null;
     }
 
-    private void MoveTile(LauncherNode dragged, LauncherNode? target)
+    private void MoveTile(LauncherNode dragged, LauncherNode? target, bool insertBefore)
     {
         if (target == dragged)
         {
@@ -544,10 +561,15 @@ public partial class StartMenuWindow : Window
             return;
         }
 
+        var oldPositions = IconsPanel.Children
+            .OfType<System.Windows.Controls.Button>()
+            .ToDictionary(tile => tile, tile => tile.TransformToAncestor(IconsPanel).Transform(new System.Windows.Point()));
+
         source.Remove(dragged);
         if (target is not null && source.Contains(target))
         {
-            source.Insert(source.IndexOf(target), dragged);
+            var targetIndex = source.IndexOf(target);
+            source.Insert(insertBefore ? targetIndex : targetIndex + 1, dragged);
         }
         else
         {
@@ -567,7 +589,56 @@ public partial class StartMenuWindow : Window
         }
 
         _main.Save();
-        RefreshIcons();
+        AnimateTilesToNewOrder(oldPositions);
+    }
+
+    private void AnimateTilesToNewOrder(IReadOnlyDictionary<System.Windows.Controls.Button, System.Windows.Point> oldPositions)
+    {
+        if (SelectedFolder is null)
+        {
+            return;
+        }
+
+        var tilesByNode = IconsPanel.Children
+            .OfType<System.Windows.Controls.Button>()
+            .Where(tile => tile.Tag is LauncherNode)
+            .ToDictionary(tile => (LauncherNode)tile.Tag, tile => tile);
+
+        var orderedTiles = SelectedFolder.Children
+            .Where(node => node.CanLaunch && tilesByNode.ContainsKey(node))
+            .Select(node => tilesByNode[node])
+            .ToList();
+
+        IconsPanel.Children.Clear();
+        foreach (var tile in orderedTiles)
+        {
+            IconsPanel.Children.Add(tile);
+        }
+
+        IconsPanel.UpdateLayout();
+        foreach (var tile in orderedTiles)
+        {
+            if (!oldPositions.TryGetValue(tile, out var oldPosition))
+            {
+                continue;
+            }
+
+            var newPosition = tile.TransformToAncestor(IconsPanel).Transform(new System.Windows.Point());
+            var translate = new System.Windows.Media.TranslateTransform(
+                oldPosition.X - newPosition.X,
+                oldPosition.Y - newPosition.Y);
+            tile.RenderTransform = translate;
+
+            var duration = new Duration(TimeSpan.FromMilliseconds(220));
+            var easing = new System.Windows.Media.Animation.CubicEase
+            {
+                EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut
+            };
+            translate.BeginAnimation(System.Windows.Media.TranslateTransform.XProperty,
+                new System.Windows.Media.Animation.DoubleAnimation(0, duration) { EasingFunction = easing });
+            translate.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty,
+                new System.Windows.Media.Animation.DoubleAnimation(0, duration) { EasingFunction = easing });
+        }
     }
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)

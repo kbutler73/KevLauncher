@@ -9,7 +9,9 @@ public enum DropPosition
     None,
     Before,
     Inside,
-    After
+    After,
+    TileBefore,
+    TileAfter
 }
 
 public class DropAdorner : Adorner
@@ -42,6 +44,12 @@ public class DropAdorner : Adorner
             case DropPosition.Inside:
                 // draw a border around to indicate inside
                 drawingContext.DrawRectangle(null, renderPen, adornedElementRect);
+                break;
+            case DropPosition.TileBefore:
+                drawingContext.DrawLine(renderPen, new System.Windows.Point(0, 4), new System.Windows.Point(0, adornedElementRect.Height - 4));
+                break;
+            case DropPosition.TileAfter:
+                drawingContext.DrawLine(renderPen, new System.Windows.Point(adornedElementRect.Width, 4), new System.Windows.Point(adornedElementRect.Width, adornedElementRect.Height - 4));
                 break;
         }
     }
