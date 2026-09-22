@@ -8,6 +8,10 @@ namespace KevLauncher;
 public partial class StartMenuWindow : Window
 {
     private readonly MainWindow _main;
+    private System.Windows.Point _tileDragStart;
+    private System.Windows.Controls.Button? _draggedTile;
+    private System.Windows.Controls.Button? _dropTargetTile;
+    private bool _isDraggingTile;
 
     public ObservableCollection<LauncherNode> Folders { get; } = new();
 
@@ -215,6 +219,8 @@ public partial class StartMenuWindow : Window
             stack.Children.Add(txt);
             btn.Content = stack;
             btn.Click += IconButton_Click;
+            btn.PreviewMouseLeftButtonDown += Tile_PreviewMouseLeftButtonDown;
+            btn.PreviewMouseMove += Tile_PreviewMouseMove;
             // set DataContext so context menu handlers can find the node if needed
             btn.DataContext = child;
 
@@ -366,6 +372,11 @@ public partial class StartMenuWindow : Window
 
     private void IconButton_Click(object? sender, RoutedEventArgs e)
     {
+        if (_isDraggingTile)
+        {
+            return;
+        }
+
         if (sender is System.Windows.Controls.Button b && b.Tag is LauncherNode node)
         {
             _main.LaunchItem(node);
@@ -380,6 +391,183 @@ public partial class StartMenuWindow : Window
                 Hide();
             }
         }
+    }
+
+    private void Tile_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        _draggedTile = sender as System.Windows.Controls.Button;
+        _tileDragStart = e.GetPosition(IconsPanel);
+    }
+
+    private void Tile_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (_draggedTile != sender || e.LeftButton != System.Windows.Input.MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        var position = e.GetPosition(IconsPanel);
+        if (Math.Abs(position.X - _tileDragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(position.Y - _tileDragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        if (_draggedTile.Tag is not LauncherNode node)
+        {
+            return;
+        }
+
+        _isDraggingTile = true;
+        _draggedTile.Opacity = 0.45;
+        try
+        {
+            System.Windows.DragDrop.DoDragDrop(_draggedTile,
+                new System.Windows.DataObject("KevLauncher.StartMenuTile", node),
+                System.Windows.DragDropEffects.Move);
+        }
+        finally
+        {
+            if (_draggedTile is not null)
+            {
+                _draggedTile.Opacity = 1;
+            }
+
+            _draggedTile = null;
+            ClearDropTarget();
+            // WPF can raise Click immediately after a completed drag.
+            Dispatcher.BeginInvoke(() => _isDraggingTile = false,
+                System.Windows.Threading.DispatcherPriority.Input);
+        }
+    }
+
+    private void IconsPanel_DragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent("KevLauncher.StartMenuTile"))
+        {
+            e.Effects = System.Windows.DragDropEffects.None;
+            e.Handled = true;
+            return;
+        }
+
+        var target = FindTileAt(e.GetPosition(IconsPanel));
+        if (target == _draggedTile)
+        {
+            target = null;
+        }
+
+        SetDropTarget(target);
+        e.Effects = System.Windows.DragDropEffects.Move;
+        e.Handled = true;
+    }
+
+    private void IconsPanel_DragLeave(object sender, System.Windows.DragEventArgs e)
+    {
+        if (!IconsPanel.IsMouseOver)
+        {
+            ClearDropTarget();
+        }
+    }
+
+    private void IconsPanel_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        try
+        {
+            if (e.Data.GetData("KevLauncher.StartMenuTile") is not LauncherNode dragged || SelectedFolder is null)
+            {
+                return;
+            }
+
+            var target = FindTileAt(e.GetPosition(IconsPanel))?.Tag as LauncherNode;
+            MoveTile(dragged, target);
+        }
+        finally
+        {
+            ClearDropTarget();
+            e.Handled = true;
+        }
+    }
+
+    private System.Windows.Controls.Button? FindTileAt(System.Windows.Point point)
+    {
+        var element = IconsPanel.InputHitTest(point) as DependencyObject;
+        while (element is not null && element != IconsPanel)
+        {
+            if (element is System.Windows.Controls.Button button && button.Parent == IconsPanel)
+            {
+                return button;
+            }
+
+            element = System.Windows.Media.VisualTreeHelper.GetParent(element);
+        }
+
+        return null;
+    }
+
+    private void SetDropTarget(System.Windows.Controls.Button? tile)
+    {
+        if (_dropTargetTile == tile)
+        {
+            return;
+        }
+
+        ClearDropTarget();
+        _dropTargetTile = tile;
+        if (tile is not null)
+        {
+            tile.Background = System.Windows.Application.Current?.Resources["AccentBrush"] as System.Windows.Media.Brush
+                              ?? System.Windows.Media.Brushes.LightSkyBlue;
+            tile.Opacity = 0.7;
+        }
+    }
+
+    private void ClearDropTarget()
+    {
+        if (_dropTargetTile is not null)
+        {
+            _dropTargetTile.Background = System.Windows.Media.Brushes.Transparent;
+            _dropTargetTile.Opacity = 1;
+            _dropTargetTile = null;
+        }
+    }
+
+    private void MoveTile(LauncherNode dragged, LauncherNode? target)
+    {
+        if (target == dragged)
+        {
+            return;
+        }
+
+        var source = SelectedFolder?.Id == "__root" ? _main.RootItems : SelectedFolder?.Children;
+        if (source is null || !source.Contains(dragged))
+        {
+            return;
+        }
+
+        source.Remove(dragged);
+        if (target is not null && source.Contains(target))
+        {
+            source.Insert(source.IndexOf(target), dragged);
+        }
+        else
+        {
+            // Dropping on empty space places the tile at the end, like a phone launcher.
+            source.Add(dragged);
+        }
+
+        // The Root entry is a display-only collection, so mirror the persisted root
+        // collection back into it before rebuilding the tiles.
+        if (SelectedFolder?.Id == "__root")
+        {
+            SelectedFolder.Children.Clear();
+            foreach (var item in _main.RootItems.Where(item => !item.IsFolder))
+            {
+                SelectedFolder.Children.Add(item);
+            }
+        }
+
+        _main.Save();
+        RefreshIcons();
     }
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)

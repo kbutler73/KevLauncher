@@ -11,7 +11,9 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <Border Background="{TemplateBinding Background}" CornerRadius="10">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -31,7 +33,11 @@
 
         <ScrollViewer Grid.Column="1" Padding="12" Background="{DynamicResource SurfaceBackground}"
                       VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-            <WrapPanel x:Name="IconsPanel" IsItemsHost="False" Orientation="Horizontal" />
+            <WrapPanel x:Name="IconsPanel" IsItemsHost="False" Orientation="Horizontal"
+                       AllowDrop="True"
+                       DragOver="IconsPanel_DragOver"
+                       DragLeave="IconsPanel_DragLeave"
+                       Drop="IconsPanel_Drop" />
         </ScrollViewer>
     </Grid>
 </Window>
