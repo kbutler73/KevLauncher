@@ -465,6 +465,102 @@ public partial class StartMenuWindow : Window
         e.Handled = true;
     }
 
+    private void StartMenuWindow_PreviewDragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        // Explorer supplies paths through FileDrop. Handle this at the window level so
+        // drops work over the sidebar, a tile, or empty space in the Start Menu.
+        if (!e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+        {
+            return;
+        }
+
+        e.Effects = System.Windows.DragDropEffects.Copy;
+        e.Handled = true;
+    }
+
+    private void StartMenuWindow_PreviewDrop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (e.Data.GetData(System.Windows.DataFormats.FileDrop) is not string[] paths)
+        {
+            return;
+        }
+
+        AddDroppedPaths(paths);
+        e.Handled = true;
+    }
+
+    private void AddDroppedPaths(IEnumerable<string> paths)
+    {
+        var additions = paths
+            .Where(path => System.IO.File.Exists(path) || System.IO.Directory.Exists(path))
+            .Where(path => !ContainsLaunchPath(_main.RootItems, path))
+            .Select(LauncherNode.CreateLaunchItem)
+            .ToList();
+
+        if (additions.Count == 0)
+        {
+            return;
+        }
+
+        var destination = SelectedFolder;
+        if (destination?.Id == "__root" || destination is null)
+        {
+            var root = GetOrCreateRootFolder();
+            foreach (var item in additions)
+            {
+                _main.RootItems.Add(item);
+                root.Children.Add(item);
+            }
+
+            if (SelectedFolder is null)
+            {
+                SelectedFolder = root;
+                FoldersList.SelectedItem = root;
+            }
+        }
+        else
+        {
+            foreach (var item in additions)
+            {
+                destination.Children.Add(item);
+            }
+        }
+
+        _main.Save();
+        RefreshIcons();
+    }
+
+    private LauncherNode GetOrCreateRootFolder()
+    {
+        var root = Folders.FirstOrDefault(folder => folder.Id == "__root");
+        if (root is not null)
+        {
+            return root;
+        }
+
+        root = new LauncherNode { Id = "__root", Name = "Root", IsFolder = true };
+        Folders.Insert(0, root);
+        return root;
+    }
+
+    private static bool ContainsLaunchPath(IEnumerable<LauncherNode> nodes, string path)
+    {
+        foreach (var node in nodes)
+        {
+            if (node.CanLaunch && string.Equals(node.Path, path, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (ContainsLaunchPath(node.Children, path))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private void IconsPanel_DragLeave(object sender, System.Windows.DragEventArgs e)
     {
         if (!IconsPanel.IsMouseOver)

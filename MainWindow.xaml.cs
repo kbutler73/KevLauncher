@@ -15,8 +15,8 @@ public partial class MainWindow : Window
     private LauncherNode? _selectedNode;
     private System.Windows.Point _dragStartPoint;
     private string? _draggedNodeId;
-        private bool _minimizeToTray = false; // when false, keep taskbar icon visible
-        private WindowState _lastWindowState = WindowState.Normal;
+    private bool _minimizeToTray = false; // when false, keep taskbar icon visible
+    private WindowState _lastWindowState = WindowState.Normal;
 
     public ObservableCollection<LauncherNode> RootItems { get; } = [];
 
@@ -536,19 +536,60 @@ public partial class MainWindow : Window
     {
         try
         {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = item.Path,
-                Arguments = item.Parameters ?? string.Empty,
-                UseShellExecute = true,
-                WorkingDirectory = !string.IsNullOrWhiteSpace(item.Path) && Directory.Exists(item.Path)
-                    ? item.Path
-                    : Path.GetDirectoryName(item.Path)
-            });
+            // Sending a network folder through Explorer establishes the network session
+            // (and, when needed, lets Windows request credentials) before opening it.
+            // Avoid Directory.Exists here: that probe can fail for a cold share.
+            _ = OpenFolderAsync(item.Path);
         }
         catch (Exception ex)
         {
             System.Windows.MessageBox.Show(this, $"Could not launch {item.Name}.\n\n{ex.Message}", "KevLauncher", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private static bool IsNetworkLocation(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        if (path.StartsWith(@"\\", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        try
+        {
+            var root = Path.GetPathRoot(path);
+            return !string.IsNullOrWhiteSpace(root)
+                && new DriveInfo(root).DriveType == DriveType.Network;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
+    private static void OpenInExplorer(string path)
+    {
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = "explorer.exe",
+            Arguments = $"\"{path.Replace("\"", "\\\"")}\"",
+            UseShellExecute = true
+        });
+    }
+
+    private static async Task OpenFolderAsync(string path)
+    {
+        if (!await ExplorerTabLauncher.TryOpenInExistingTabAsync(path))
+        {
+            OpenInExplorer(path);
         }
     }
 
@@ -565,11 +606,18 @@ public partial class MainWindow : Window
             return;
         }
 
-        Process.Start(new ProcessStartInfo
+        if (IsNetworkLocation(target))
         {
-            FileName = target,
-            UseShellExecute = true
-        });
+            _ = OpenFolderAsync(target);
+        }
+        else
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = target,
+                UseShellExecute = true
+            });
+        }
     }
 
     private void OnRemoveClick(object sender, RoutedEventArgs e)

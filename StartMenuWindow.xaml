@@ -5,7 +5,10 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="KevLauncher" Width="760" Height="520" MinWidth="620" MinHeight="420" ResizeMode="CanResize" ShowInTaskbar="True"
         WindowStyle="None"
-        Background="{DynamicResource WindowBackground}">
+        Background="{DynamicResource WindowBackground}"
+        AllowDrop="True"
+        PreviewDragOver="StartMenuWindow_PreviewDragOver"
+        PreviewDrop="StartMenuWindow_PreviewDrop">
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="38" ResizeBorderThickness="6" CornerRadius="14" GlassFrameThickness="0" />
     </shell:WindowChrome.WindowChrome>
@@ -116,19 +119,13 @@
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="140" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
         <Border Grid.Column="0" Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
             <Grid Margin="6,14">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <TextBlock Text="APPS" FontWeight="SemiBold" FontSize="12"
-                           Foreground="{DynamicResource SecondaryTextBrush}" Margin="8,0,8,10" />
-                <ListBox Grid.Row="1" x:Name="FoldersList" ItemsSource="{Binding Folders}" DisplayMemberPath="Name"
+                <ListBox x:Name="FoldersList" ItemsSource="{Binding Folders}" DisplayMemberPath="Name"
                          SelectedItem="{Binding SelectedFolder, Mode=TwoWay}" Background="Transparent"
                          BorderThickness="0" ItemContainerStyle="{StaticResource FolderListItem}"
                          ScrollViewer.VerticalScrollBarVisibility="Auto" />
