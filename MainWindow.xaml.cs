@@ -603,7 +603,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Save()
+    public void Save()
     {
         _store.Save(RootItems);
         RebuildVisibleTree();

@@ -48,8 +48,21 @@ public partial class StartMenuWindow : Window
         Deactivated += (_, _) =>
         {
             // When the Start Menu loses focus (click elsewhere or taskbar), minimize so it stays in taskbar
+            // BUT if we have an owned dialog open (Edit dialog), don't minimize — allow editing.
             try
             {
+                // if any owned window is visible, skip minimizing
+                if (System.Windows.Application.Current is { } app)
+                {
+                    foreach (Window w in app.Windows)
+                    {
+                        if (w.Owner == this && w.IsVisible)
+                        {
+                            return;
+                        }
+                    }
+                }
+
                 if (this.WindowState == WindowState.Normal)
                 {
                     this.WindowState = WindowState.Minimized;
@@ -202,6 +215,40 @@ public partial class StartMenuWindow : Window
             stack.Children.Add(txt);
             btn.Content = stack;
             btn.Click += IconButton_Click;
+            // set DataContext so context menu handlers can find the node if needed
+            btn.DataContext = child;
+
+            // attach a context menu to allow editing the tile
+            try
+            {
+                var cm = new System.Windows.Controls.ContextMenu();
+                var editItem = new System.Windows.Controls.MenuItem { Header = "Edit..." };
+                editItem.Click += (_, _) =>
+                {
+                    try
+                    {
+                        var dlg = new EditItemWindow(child.Name, child.Path, child.Parameters)
+                        {
+                            Owner = this
+                        };
+
+                        if (dlg.ShowDialog() == true)
+                        {
+                            child.Name = dlg.ItemName;
+                            child.Path = dlg.ItemPath;
+                            child.Parameters = dlg.ItemParameters;
+                            _main.Save();
+                            // refresh this view so changes show immediately
+                            RefreshIcons();
+                        }
+                    }
+                    catch { }
+                };
+
+                cm.Items.Add(editItem);
+                btn.ContextMenu = cm;
+            }
+            catch { }
 
             // hover visual: subtle accent background behind the icon
             try
