@@ -38,20 +38,30 @@ internal static class ExplorerTabLauncher
             // address-bar shortcuts. Recheck focus after the tab has been created
             // so we never type a path into another application.
             await Task.Delay(125);
-            if (GetForegroundWindow() != explorerWindow)
+            if (!HasExplorerFocus(explorerWindow))
             {
                 return false;
             }
 
             SendKeys.SendWait("^t");
             await Task.Delay(125);
-            if (GetForegroundWindow() != explorerWindow)
+            if (!HasExplorerFocus(explorerWindow))
             {
                 return false;
             }
 
             SendKeys.SendWait("^l");
+            if (!HasExplorerFocus(explorerWindow))
+            {
+                return false;
+            }
+
             SendKeys.SendWait(EscapeForSendKeys(path));
+            if (!HasExplorerFocus(explorerWindow))
+            {
+                return false;
+            }
+
             SendKeys.SendWait("{ENTER}");
             return true;
         }
@@ -99,6 +109,9 @@ internal static class ExplorerTabLauncher
         return GetClassName(window, className, className.Capacity) > 0
             && string.Equals(className.ToString(), ExplorerWindowClass, StringComparison.Ordinal);
     }
+
+    private static bool HasExplorerFocus(IntPtr explorerWindow) =>
+        GetForegroundWindow() == explorerWindow && IsExplorerWindow(explorerWindow);
 
     private static string EscapeForSendKeys(string value)
     {

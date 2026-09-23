@@ -536,10 +536,21 @@ public partial class MainWindow : Window
     {
         try
         {
-            // Sending a network folder through Explorer establishes the network session
-            // (and, when needed, lets Windows request credentials) before opening it.
-            // Avoid Directory.Exists here: that probe can fail for a cold share.
-            _ = OpenFolderAsync(item.Path);
+            if (IsFolderPath(item.Path))
+            {
+                _ = OpenFolderAsync(item.Path);
+                return;
+            }
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = item.Path,
+                Arguments = item.Parameters ?? string.Empty,
+                UseShellExecute = true,
+                WorkingDirectory = !string.IsNullOrWhiteSpace(item.Path) && Directory.Exists(item.Path)
+                    ? item.Path
+                    : Path.GetDirectoryName(item.Path)
+            });
         }
         catch (Exception ex)
         {
@@ -575,6 +586,12 @@ public partial class MainWindow : Window
         }
     }
 
+    private static bool IsNetworkFolderPath(string path) =>
+        IsNetworkLocation(path) && (!Path.HasExtension(path) || Directory.Exists(path));
+
+    private static bool IsFolderPath(string path) =>
+        Directory.Exists(path) || IsNetworkFolderPath(path);
+
     private static void OpenInExplorer(string path)
     {
         Process.Start(new ProcessStartInfo
@@ -587,7 +604,7 @@ public partial class MainWindow : Window
 
     private static async Task OpenFolderAsync(string path)
     {
-        if (!await ExplorerTabLauncher.TryOpenInExistingTabAsync(path))
+        //if (!await ExplorerTabLauncher.TryOpenInExistingTabAsync(path))
         {
             OpenInExplorer(path);
         }
@@ -606,18 +623,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (IsNetworkLocation(target))
-        {
-            _ = OpenFolderAsync(target);
-        }
-        else
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = target,
-                UseShellExecute = true
-            });
-        }
+        _ = OpenFolderAsync(target);
     }
 
     private void OnRemoveClick(object sender, RoutedEventArgs e)
