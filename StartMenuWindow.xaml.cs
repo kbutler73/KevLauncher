@@ -7,7 +7,7 @@ namespace KevLauncher;
 
 public partial class StartMenuWindow : Window
 {
-    private readonly MainWindow _main;
+    private readonly LauncherManager _launcher;
     private System.Windows.Point _tileDragStart;
     private System.Windows.Controls.Button? _draggedTile;
     private System.Windows.Controls.Button? _dropTargetTile;
@@ -20,15 +20,15 @@ public partial class StartMenuWindow : Window
 
     public LauncherNode? SelectedFolder { get; set; }
 
-    public StartMenuWindow(MainWindow main)
+    public StartMenuWindow(LauncherManager launcher)
     {
         InitializeComponent();
-        _main = main;
+        _launcher = launcher;
 
-        // populate folders from main's RootItems
+        // populate folders from the launcher's saved items
         // include a synthetic 'Root' folder that contains root-level items (non-folder)
         var rootNode = new LauncherNode { Id = "__root", Name = "Root", IsFolder = true };
-        foreach (var item in _main.RootItems.Where(i => !i.IsFolder))
+        foreach (var item in _launcher.RootItems.Where(i => !i.IsFolder))
         {
             rootNode.Children.Add(item);
         }
@@ -38,7 +38,7 @@ public partial class StartMenuWindow : Window
             Folders.Add(rootNode);
         }
 
-        foreach (var item in _main.RootItems.Where(i => i.IsFolder))
+        foreach (var item in _launcher.RootItems.Where(i => i.IsFolder))
         {
             Folders.Add(item);
         }
@@ -92,12 +92,198 @@ public partial class StartMenuWindow : Window
             SelectedFolder = FoldersList.SelectedItem as LauncherNode;
             RefreshIcons();
         };
+        FoldersList.ItemContainerGenerator.StatusChanged += (_, _) => AttachFolderContextMenus();
+        AttachFolderContextMenus();
 
         // ensure first item selected
         if (FoldersList.Items.Count > 0)
         {
             FoldersList.SelectedIndex = 0;
         }
+    }
+
+    private void AttachFolderContextMenus()
+    {
+        foreach (var folder in Folders.Where(folder => folder.Id != "__root"))
+        {
+            if (FoldersList.ItemContainerGenerator.ContainerFromItem(folder) is not ListBoxItem item || item.ContextMenu is not null)
+            {
+                continue;
+            }
+
+            var menu = new System.Windows.Controls.ContextMenu();
+            var renameItem = new System.Windows.Controls.MenuItem { Header = "Rename" };
+            renameItem.Click += OnRenameFolderClick;
+            var removeItem = new System.Windows.Controls.MenuItem { Header = "Remove" };
+            removeItem.Click += OnRemoveFolderClick;
+            menu.Items.Add(renameItem);
+            menu.Items.Add(removeItem);
+            menu.Opened += (_, _) =>
+            {
+                FoldersList.SelectedItem = folder;
+                SelectedFolder = folder;
+                RefreshIcons();
+            };
+            item.ContextMenu = menu;
+        }
+    }
+
+    private void OnCreateFolderClick(object sender, RoutedEventArgs e)
+    {
+        var name = PromptForFolderName("New KevLauncher Folder", "New Folder");
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        var folder = LauncherNode.CreateFolder(name);
+        _launcher.RootItems.Add(folder);
+        Folders.Add(folder);
+        _launcher.Save();
+        FoldersList.SelectedItem = folder;
+    }
+
+    private void OnRenameFolderClick(object sender, RoutedEventArgs e)
+    {
+        var folder = SelectedFolder;
+        if (folder is null || folder.Id == "__root")
+        {
+            return;
+        }
+
+        var name = PromptForFolderName("Rename KevLauncher Folder", folder.Name);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        folder.Name = name;
+        _launcher.Save();
+        FoldersList.Items.Refresh();
+    }
+
+    private void OnRemoveFolderClick(object sender, RoutedEventArgs e)
+    {
+        var folder = SelectedFolder;
+        if (folder is null || folder.Id == "__root")
+        {
+            return;
+        }
+
+        if (!ConfirmRemoveFolder(folder))
+        {
+            return;
+        }
+
+        _launcher.RootItems.Remove(folder);
+        Folders.Remove(folder);
+        _launcher.Save();
+
+        SelectedFolder = Folders.FirstOrDefault();
+        FoldersList.SelectedItem = SelectedFolder;
+        RefreshIcons();
+    }
+
+    private bool ConfirmRemoveFolder(LauncherNode folder)
+    {
+        var removeButton = new System.Windows.Controls.Button
+        {
+            Content = "Remove",
+            Width = 80,
+            IsDefault = true,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        var cancelButton = new System.Windows.Controls.Button
+        {
+            Content = "Cancel",
+            Width = 80,
+            IsCancel = true
+        };
+        var dialog = new Window
+        {
+            Title = "Remove Folder",
+            Owner = this,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            ShowInTaskbar = false,
+            Content = new System.Windows.Controls.StackPanel
+            {
+                Margin = new Thickness(16),
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = $"Remove the folder '{folder.Name}' and all {folder.Children.Count} item(s) inside it?",
+                        TextWrapping = TextWrapping.Wrap,
+                        MaxWidth = 360,
+                        Margin = new Thickness(0, 0, 0, 16)
+                    },
+                    new System.Windows.Controls.StackPanel
+                    {
+                        Orientation = System.Windows.Controls.Orientation.Horizontal,
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+                        Children = { removeButton, cancelButton }
+                    }
+                }
+            }
+        };
+
+        removeButton.Click += (_, _) => dialog.DialogResult = true;
+        return dialog.ShowDialog() == true;
+    }
+
+    private string? PromptForFolderName(string title, string initialName)
+    {
+        var nameBox = new System.Windows.Controls.TextBox
+        {
+            Text = initialName,
+            MinWidth = 280,
+            Margin = new Thickness(0, 8, 0, 16)
+        };
+        var okButton = new System.Windows.Controls.Button
+        {
+            Content = "OK",
+            Width = 80,
+            IsDefault = true,
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        var cancelButton = new System.Windows.Controls.Button
+        {
+            Content = "Cancel",
+            Width = 80,
+            IsCancel = true
+        };
+        var dialog = new Window
+        {
+            Title = title,
+            Owner = this,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            SizeToContent = SizeToContent.WidthAndHeight,
+            ShowInTaskbar = false,
+            Content = new StackPanel
+            {
+                Margin = new Thickness(16),
+                Children =
+                {
+                    new TextBlock { Text = "Folder name:" },
+                    nameBox,
+                    new StackPanel
+                    {
+                        Orientation = System.Windows.Controls.Orientation.Horizontal,
+                        HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+                        Children = { okButton, cancelButton }
+                    }
+                }
+            }
+        };
+
+        okButton.Click += (_, _) => dialog.DialogResult = true;
+        nameBox.SelectAll();
+        nameBox.Focus();
+
+        return dialog.ShowDialog() == true ? nameBox.Text.Trim() : null;
     }
 
     private void RefreshIcons()
@@ -227,10 +413,21 @@ public partial class StartMenuWindow : Window
             // set DataContext so context menu handlers can find the node if needed
             btn.DataContext = child;
 
-            // attach a context menu to allow editing the tile
+            // attach a context menu to allow editing and managing the tile
             try
             {
                 var cm = new System.Windows.Controls.ContextMenu();
+                var folderPath = System.IO.Directory.Exists(child.Path)
+                    ? child.Path
+                    : System.IO.Path.GetDirectoryName(child.Path);
+                var openFolderItem = new System.Windows.Controls.MenuItem
+                {
+                    Header = "Open folder",
+                    IsEnabled = !string.IsNullOrWhiteSpace(folderPath)
+                };
+                openFolderItem.Click += (_, _) => OpenTileFolder(child);
+                cm.Items.Add(openFolderItem);
+
                 var editItem = new System.Windows.Controls.MenuItem { Header = "Edit..." };
                 editItem.Click += (_, _) =>
                 {
@@ -246,15 +443,19 @@ public partial class StartMenuWindow : Window
                             child.Name = dlg.ItemName;
                             child.Path = dlg.ItemPath;
                             child.Parameters = dlg.ItemParameters;
-                            _main.Save();
+                            _launcher.Save();
                             // refresh this view so changes show immediately
                             RefreshIcons();
                         }
                     }
                     catch { }
                 };
-
                 cm.Items.Add(editItem);
+                cm.Items.Add(new System.Windows.Controls.Separator());
+
+                var removeItem = new System.Windows.Controls.MenuItem { Header = "Remove" };
+                removeItem.Click += (_, _) => RemoveTile(child);
+                cm.Items.Add(removeItem);
                 btn.ContextMenu = cm;
             }
             catch { }
@@ -382,7 +583,7 @@ public partial class StartMenuWindow : Window
 
         if (sender is System.Windows.Controls.Button b && b.Tag is LauncherNode node)
         {
-            _main.LaunchItem(node);
+            _launcher.LaunchItem(node, this);
             // minimize after launching so the window remains in the taskbar
             try
             {
@@ -394,6 +595,56 @@ public partial class StartMenuWindow : Window
                 Hide();
             }
         }
+    }
+
+    private void OpenTileFolder(LauncherNode item)
+    {
+        var target = System.IO.Directory.Exists(item.Path)
+            ? item.Path
+            : System.IO.Path.GetDirectoryName(item.Path);
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            return;
+        }
+
+        try
+        {
+            var startInfo = new System.Diagnostics.ProcessStartInfo("explorer.exe")
+            {
+                UseShellExecute = true
+            };
+            startInfo.ArgumentList.Add(target);
+            System.Diagnostics.Process.Start(startInfo);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"Could not open the folder for {item.Name}.\n\n{ex.Message}", "KevLauncher", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void RemoveTile(LauncherNode item)
+    {
+        var selectedFolder = SelectedFolder;
+        if (selectedFolder is null || !selectedFolder.Children.Remove(item))
+        {
+            return;
+        }
+
+        if (selectedFolder.Id == "__root")
+        {
+            _launcher.RootItems.Remove(item);
+        }
+
+        _launcher.Save();
+
+        if (selectedFolder.Id == "__root" && selectedFolder.Children.Count == 0)
+        {
+            Folders.Remove(selectedFolder);
+            SelectedFolder = Folders.FirstOrDefault();
+            FoldersList.SelectedItem = SelectedFolder;
+        }
+
+        RefreshIcons();
     }
 
     private void Tile_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -493,7 +744,7 @@ public partial class StartMenuWindow : Window
     {
         var additions = paths
             .Where(path => System.IO.File.Exists(path) || System.IO.Directory.Exists(path))
-            .Where(path => !ContainsLaunchPath(_main.RootItems, path))
+            .Where(path => !ContainsLaunchPath(_launcher.RootItems, path))
             .Select(LauncherNode.CreateLaunchItem)
             .ToList();
 
@@ -508,7 +759,7 @@ public partial class StartMenuWindow : Window
             var root = GetOrCreateRootFolder();
             foreach (var item in additions)
             {
-                _main.RootItems.Add(item);
+                _launcher.RootItems.Add(item);
                 root.Children.Add(item);
             }
 
@@ -526,7 +777,7 @@ public partial class StartMenuWindow : Window
             }
         }
 
-        _main.Save();
+        _launcher.Save();
         RefreshIcons();
     }
 
@@ -651,7 +902,7 @@ public partial class StartMenuWindow : Window
             return;
         }
 
-        var source = SelectedFolder?.Id == "__root" ? _main.RootItems : SelectedFolder?.Children;
+        var source = SelectedFolder?.Id == "__root" ? _launcher.RootItems : SelectedFolder?.Children;
         if (source is null || !source.Contains(dragged))
         {
             return;
@@ -678,13 +929,13 @@ public partial class StartMenuWindow : Window
         if (SelectedFolder?.Id == "__root")
         {
             SelectedFolder.Children.Clear();
-            foreach (var item in _main.RootItems.Where(item => !item.IsFolder))
+            foreach (var item in _launcher.RootItems.Where(item => !item.IsFolder))
             {
                 SelectedFolder.Children.Add(item);
             }
         }
 
-        _main.Save();
+        _launcher.Save();
         AnimateTilesToNewOrder(oldPositions);
     }
 

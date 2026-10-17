@@ -11,15 +11,14 @@ public partial class App : System.Windows.Application
 {
     private Drawing.Icon? _appIcon;
     private Forms.NotifyIcon? _trayIcon;
-    private Forms.ContextMenuStrip? _launcherMenu;
-    private MainWindow? _mainWindow;
+    private LauncherManager? _launcher;
     private StartMenuWindow? _startMenuWindow;
 
     private void OnStartup(object sender, StartupEventArgs e)
     {
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
-        _mainWindow = new MainWindow();
+        _launcher = new LauncherManager();
 
         // Apply theme based on Windows setting
         try
@@ -44,8 +43,8 @@ public partial class App : System.Windows.Application
 
         _trayIcon.MouseClick += OnTrayIconMouseClick;
 
-        // Create StartMenuWindow as the application's main window and start minimized so only the taskbar icon appears
-        var startupWin = new StartMenuWindow(_mainWindow);
+        // Create the Start Menu as the application's main window and start minimized so only the taskbar icon appears
+        var startupWin = new StartMenuWindow(_launcher);
         _startMenuWindow = startupWin;
         MainWindow = startupWin;
         // Position the window centered at the bottom of the primary work area before showing
@@ -196,9 +195,9 @@ public partial class App : System.Windows.Application
     {
         menu.Items.Clear();
 
-        if (_mainWindow is not null && _mainWindow.RootItems.Count > 0)
+        if (_launcher is not null && _launcher.RootItems.Count > 0)
         {
-            AddLauncherMenuItems(menu.Items, _mainWindow.RootItems);
+            AddLauncherMenuItems(menu.Items, _launcher.RootItems);
 
             menu.Items.Add(new Forms.ToolStripSeparator());
         }
@@ -234,9 +233,8 @@ public partial class App : System.Windows.Application
             // ignore failures when reading registry
         }
 
-        menu.Items.Add("Open KevLauncher", null, (_, _) => ShowLauncher());
         menu.Items.Add("Open Start Menu", null, (_, _) => ShowStartMenu());
-        menu.Items.Add("Add item...", null, (_, _) => _mainWindow?.AddItemFromDialog());
+        menu.Items.Add("Add item...", null, (_, _) => _launcher?.AddItemFromDialog(_startMenuWindow));
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitApplication());
     }
@@ -245,37 +243,8 @@ public partial class App : System.Windows.Application
     {
         if (e.Button == Forms.MouseButtons.Left)
         {
-            ShowLauncherMenu();
+            ShowStartMenu();
         }
-    }
-
-    private void ShowLauncherMenu()
-    {
-        if (_mainWindow is null)
-        {
-            return;
-        }
-
-        _launcherMenu?.Dispose();
-        _launcherMenu = BuildLauncherOnlyMenu();
-        _launcherMenu.Show(Forms.Cursor.Position);
-    }
-
-    private Forms.ContextMenuStrip BuildLauncherOnlyMenu()
-    {
-        var menu = new Forms.ContextMenuStrip();
-
-        if (_mainWindow is not null && _mainWindow.RootItems.Count > 0)
-        {
-            AddLauncherMenuItems(menu.Items, _mainWindow.RootItems);
-        }
-
-        if (menu.Items.Count == 0)
-        {
-            menu.Items.Add("No launcher items yet").Enabled = false;
-        }
-
-        return menu;
     }
 
     private void AddLauncherMenuItems(Forms.ToolStripItemCollection items, IEnumerable<LauncherNode> nodes)
@@ -296,24 +265,14 @@ public partial class App : System.Windows.Application
             }
             else if (node.CanLaunch)
             {
-                items.Add(node.Name, null, (_, _) => _mainWindow?.LaunchItem(node));
+                items.Add(node.Name, null, (_, _) => _launcher?.LaunchItem(node, _startMenuWindow));
             }
         }
     }
 
-    private void ShowLauncher()
-    {
-        if (_mainWindow is null)
-        {
-            return;
-        }
-
-        _mainWindow.ShowLauncherTree();
-    }
-
     public void ShowStartMenu()
     {
-        if (_mainWindow is null)
+        if (_launcher is null)
             return;
 
         // Reuse existing StartMenuWindow if already open
@@ -340,7 +299,7 @@ public partial class App : System.Windows.Application
             }
         }
 
-        var win = new StartMenuWindow(_mainWindow);
+        var win = new StartMenuWindow(_launcher);
         _startMenuWindow = win;
         win.Closed += (_, _) => _startMenuWindow = null;
 
@@ -382,17 +341,11 @@ public partial class App : System.Windows.Application
             _trayIcon.Dispose();
         }
 
-        _launcherMenu?.Dispose();
         _appIcon?.Dispose();
     }
 
     private void ExitApplication()
     {
-        if (_mainWindow is not null)
-        {
-            _mainWindow.IsExiting = true;
-        }
-
         Shutdown();
     }
 }

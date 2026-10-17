@@ -125,10 +125,18 @@
 
         <Border Grid.Column="0" Background="{DynamicResource SurfaceBackground}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,1,0">
             <Grid Margin="6,14">
-                <ListBox x:Name="FoldersList" ItemsSource="{Binding Folders}" DisplayMemberPath="Name"
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <ListBox Grid.Row="0" x:Name="FoldersList" ItemsSource="{Binding Folders}" DisplayMemberPath="Name"
                          SelectedItem="{Binding SelectedFolder, Mode=TwoWay}" Background="Transparent"
                          BorderThickness="0" ItemContainerStyle="{StaticResource FolderListItem}"
                          ScrollViewer.VerticalScrollBarVisibility="Auto" />
+                <Button Grid.Row="1" Content="+" ToolTip="Add folder"
+                        AutomationProperties.Name="Add folder"
+                        Click="OnCreateFolderClick" Width="38" Height="38" FontSize="24"
+                        HorizontalAlignment="Right" Margin="6,8,6,0" Padding="0" />
             </Grid>
         </Border>
 
